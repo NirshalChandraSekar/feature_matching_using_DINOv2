@@ -32,20 +32,7 @@ class Dinov2:
         self.patch_size = self.model.patch_size
 
     def prepare_image(self, image):
-        # input image is RGB and numpy
-
-        # Convert to PILfigure(figsize=(10, 10))
-    # plt.subplot(1, 2, 1)
-    # plt.imshow(image1)
-    # plt.scatter(x_center1, y_center1, color="red")
-    # plt.title("Image 1")
-
-    # plt.subplot(1, 2, 2)
-    # plt.imshow(image2)
-    # plt.scatter(x_center2, y_center2, color="red")
-    # plt.title("Image 2")
-
-    # plt.show()
+        
         image = Image.fromarray(image)
         image_tensor = self.transforms(image)
 
@@ -69,6 +56,11 @@ class Dinov2:
         row = (idx // grid_size[1])*patch_size + patch_size / 2
         col = (idx % grid_size[1])*patch_size + patch_size / 2
         return row, col
+    
+    def pixel_to_idx(self, pixel, grid_size, patch_size):
+        row, col = pixel
+        idx = int(row // patch_size * grid_size[1] + col // patch_size)
+        return idx
     
     def knn_matcher(self, features1, features2, k=1):
         # Fit a KNN model
