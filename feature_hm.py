@@ -31,10 +31,10 @@ def compute_feature_distance(index_1, feature1, feature2, grid_size2):
 if __name__ == "__main__":
     obj = Dinov2()
 
-    image1 = cv2.imread("images/bottle1.jpg")
+    image1 = cv2.imread("images/dino1.jpg")
     image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2RGB)
 
-    image2 = cv2.imread("images/bottle2.jpg")
+    image2 = cv2.imread("/home/nirshal/Downloads/real dino.jpeg")
     image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2RGB)
 
     image_tensor1, grid_size1 = obj.prepare_image(image1)
@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     feature1 = obj.extract_features(image_tensor1)
     feature2 = obj.extract_features(image_tensor2)
-
+    
     """
     Manually pick a point in first image using click event and print the point
     """

@@ -62,12 +62,35 @@ class Dinov2:
         idx = int(row // patch_size * grid_size[1] + col // patch_size)
         return idx
     
-    def knn_matcher(self, features1, features2, k=1):
+    def knn_matcher(self, features1, features2, k=2):
         # Fit a KNN model
         knn = NearestNeighbors(n_neighbors=k, metric="euclidean")
         knn.fit(features2)
         distances, indices = knn.kneighbors(features1)
         return distances, indices
+    
+    def filter_matches_with_ratio_test(self, distances, match1to2, ratio_threshold=0.7):
+        """
+        Filter matches using the ratio test.
+
+        Args:
+            distances (np.array): Array of distances for each match, shape (N, k).
+            match1to2 (np.array): Array of matched indices, shape (N, k).
+            ratio_threshold (float): Threshold for the ratio test.
+
+        Returns:
+            filtered_indices_features1 (np.array): Indices in features1 that pass the ratio test.
+            filtered_indices_features2 (np.array): Indices in features2 that pass the ratio test.
+        """
+        # Compute the ratio of the closest match to the second-closest match
+        ratios = distances[:, 0] / distances[:, 1]
+
+        # Filter matches based on the ratio threshold
+        mask = ratios < ratio_threshold
+        filtered_indices_features1 = np.arange(len(ratios))[mask]
+        filtered_indices_features2 = match1to2[mask, 0]
+
+        return filtered_indices_features1, filtered_indices_features2
 
     def get_best_matches_with_indices(self, distances, match1to2, n):
         """
@@ -104,7 +127,7 @@ class Dinov2:
         return best_distances, best_indices_features1, best_indices_features2
 
         
-def visualize_matches_with_connection_patches(image1, image2, best_indices_features1, best_indices_features2, grid_size1, grid_size2, patch_size):
+def visualize_matches_with_connection_patches(image1, image2, best_indices_features1, best_indices_features2, grid_size1, grid_size2, patch_size, object):
     """
     Visualize the best matches between two images using ConnectionPatch.
 
@@ -186,7 +209,7 @@ if __name__ == "__main__":
     n = 100  # Number of best matches to retrieve
     best_distances, best_indices_features1, best_indices_features2 = object.get_best_matches_with_indices(distances, match1to2, n)
 
-    visualize_matches_with_connection_patches(image1, image2, best_indices_features1, best_indices_features2, grid_size1, grid_size2, object.patch_size)
+    visualize_matches_with_connection_patches(image1, image2, best_indices_features1, best_indices_features2, grid_size1, grid_size2, object.patch_size, object)
 
 
 
