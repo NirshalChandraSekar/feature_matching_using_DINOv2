@@ -8,6 +8,8 @@ from PIL import Image
 from sam2.build_sam import build_sam2_video_predictor
 
 import supervision as sv
+from scipy.signal import find_peaks
+
 
 
 class VideoSegmentation:
@@ -57,48 +59,102 @@ class VideoSegmentation:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-        return point # row, col
-    
+        point = np.array(point, np.float32)
+        labels = np.array([1]*len(point), np.int32)
 
+
+        return point, labels # Point --> row, col
+    
+    def segment_video(self, video_path, point, labels):
+        inference_state = self.predictor.init_state(video_path = video_path)
+        self.predictor.reset_state(inference_state)
+
+        _, out_obj_ids, out_mask_logits = self.predictor.add_new_points_or_box(
+            inference_state=inference_state,
+            frame_idx=0,
+            obj_id=1,
+            points=point,
+            labels=labels,
+        )
+
+        mask = out_mask_logits[0].cpu().numpy().transpose(1, 2, 0)
+        cv2.imshow("mask", mask)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+        video_segments = {}
+        for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(inference_state):
+            frame_data = {}  # Dictionary to store object data for the current frame
+            for i, out_obj_id in enumerate(out_obj_ids):
+                # Generate the mask for the current object
+                mask = (out_mask_logits[i] > 0.0).cpu().numpy().transpose(1, 2, 0).astype(np.uint8) * 255
+
+                # Find contours and compute bounding box
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                if contours:
+                    contours = np.concatenate(contours)
+                    x, y, w, h = cv2.boundingRect(contours)
+                else:
+                    x, y, w, h = 0, 0, 0, 0  # Default bounding box if no contours are found
+
+                # Store the mask and bbox in the frame data
+                frame_data[out_obj_id] = {
+                    "mask": mask,
+                    "bbox": [x + w//2, y + h//2, w, h]
+                }
+            # Add the frame data to the video_segments dictionary
+            video_segments[out_frame_idx] = frame_data
+
+
+        return video_segments
+
+def find_pick_up_frame(video_segments):
+    x_cord = []
+    y_cord = []
+
+    for key in video_segments:
+        mask = video_segments[key][1]["mask"]
+        mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+
+        # draw the bounding mask on this mask image
+        x, y, w, h = video_segments[key][1]['bbox']
+        cv2.rectangle(mask, (x-w//2, y-h//2), (x+w//2, y+h//2), (0, 255, 0), 2)      
+        x_cord.append(x)
+        y_cord.append(y) 
+        cv2.imshow("mask", mask)
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
+
+    cv2.destroyAllWindows()
+
+    # plot the xcord and ycords seperately in a graph
+    peaks, _ = find_peaks(y_cord, height=0)
+    pick_up_frame = peaks[-1]
+
+    # plt.plot(x_cord)
+    plt.plot(y_cord, label="y_cord")
+    plt.plot(pick_up_frame, y_cord[pick_up_frame], "x")
+
+    plt.show()
+
+    return pick_up_frame
+    
+class HandTracking:
+    def __init__(self):
+        pass
 
 if __name__ == '__main__':
     
     vs = VideoSegmentation()
-    first_frame = vs.split_video_frames("test.mp4")
-    inference_state = vs.predictor.init_state(video_path = "frames")
-    vs.predictor.reset_state(inference_state)
+    # first_frame = vs.split_video_frames("videos/test.mp4")
 
-    point = vs.interactive_point_selection(first_frame)
-    point = np.array(point, np.float32)
-    labels = np.array([1]*len(point), np.int32)
+    # point, labels = vs.interactive_point_selection(first_frame)
+    # labels = np.array([1]*len(point), np.int32)
 
-    _, out_obj_ids, out_mask_logits = vs.predictor.add_new_points_or_box(
-    inference_state=inference_state,
-    frame_idx=0,
-    obj_id=1,
-    points=point,
-    labels=labels,
-    )
+    # video_segments = vs.segment_video("frames", point, labels)
 
-    mask = out_mask_logits[0].cpu().numpy().transpose(1, 2, 0)
-    cv2.imshow("mask", mask)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # np.save("video_segments.npy", video_segments)
 
-    video_segments = {}
-    for out_frame_idx, out_obj_ids, out_mask_logits in vs.predictor.propagate_in_video(inference_state):
-        video_segments[out_frame_idx] = {
-            out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy().transpose(1, 2, 0)
-            for i, out_obj_id in enumerate(out_obj_ids)
-        }
+    video_segments = np.load("video_segments.npy", allow_pickle=True).item()
 
-    print(video_segments[0][1].shape)
-    for key in video_segments:
-        mask = video_segments[key][1]
-        mask = (mask.astype(np.uint8)) * 255
-
-        cv2.imshow("mask", mask)
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
-
-    cv2.destroyAllWindows()
+    pick_up_frame = find_pick_up_frame(video_segments)

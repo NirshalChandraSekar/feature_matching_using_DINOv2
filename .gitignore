@@ -3,3 +3,5 @@ omniglue/
 __pycache__/
 images/
 videos/
+video_segments.npy
+frames/
