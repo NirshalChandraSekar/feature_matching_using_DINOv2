@@ -1,4 +1,4 @@
-from debug import Dinov2, visualize_matches_with_connection_patches
+from dino_funcitons import Dinov2, visualize_matches_with_connection_patches
 import cv2
 import numpy as np
 from PIL import Image

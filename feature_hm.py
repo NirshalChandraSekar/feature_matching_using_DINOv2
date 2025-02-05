@@ -1,4 +1,4 @@
-from debug import Dinov2
+from dino_funcitons import Dinov2
 import cv2
 import numpy as np
 from PIL import Image

@@ -10,6 +10,8 @@ from sam2.build_sam import build_sam2_video_predictor
 import supervision as sv
 from scipy.signal import find_peaks
 
+import mediapipe as mp
+
 
 
 class VideoSegmentation:
@@ -121,27 +123,138 @@ def find_pick_up_frame(video_segments):
         cv2.rectangle(mask, (x-w//2, y-h//2), (x+w//2, y+h//2), (0, 255, 0), 2)      
         x_cord.append(x)
         y_cord.append(y) 
-        cv2.imshow("mask", mask)
-        if cv2.waitKey(30) & 0xFF == ord('q'):
-            break
+        # cv2.imshow("mask", mask)
+        # if cv2.waitKey(30) & 0xFF == ord('q'):
+        #     break
 
-    cv2.destroyAllWindows()
+    # cv2.destroyAllWindows()
 
     # plot the xcord and ycords seperately in a graph
     peaks, _ = find_peaks(y_cord, height=0)
     pick_up_frame = peaks[-1]
 
     # plt.plot(x_cord)
-    plt.plot(y_cord, label="y_cord")
-    plt.plot(pick_up_frame, y_cord[pick_up_frame], "x")
+    # plt.plot(y_cord, label="y_cord")
+    # plt.plot(pick_up_frame, y_cord[pick_up_frame], "x")
 
-    plt.show()
+    # plt.show()
 
     return pick_up_frame
     
 class HandTracking:
-    def __init__(self):
-        pass
+    def __init__(self, static_image_mode=False, max_num_hands=2, 
+                 min_detection_confidence=0.5, min_tracking_confidence=0.5):
+        """
+        Initialize the HandTracking class.
+        
+        :param static_image_mode: Whether to treat input as static images
+        :param max_num_hands: Maximum number of hands to detect
+        :param min_detection_confidence: Minimum confidence for hand detection
+        :param min_tracking_confidence: Minimum confidence for hand tracking
+        """
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands(
+            static_image_mode=static_image_mode,
+            max_num_hands=max_num_hands,
+            min_detection_confidence=min_detection_confidence,
+            min_tracking_confidence=min_tracking_confidence
+        )
+        self.mp_draw = mp.solutions.drawing_utils
+
+    def convert_flipped_to_original_coords(self, x, y, width):
+        """
+        Convert coordinates from flipped image back to original image coordinates.
+        
+        :param x: x-coordinate in flipped image
+        :param y: y-coordinate in flipped image
+        :param width: image width
+        :return: tuple of (x, y) in original image
+        """
+        # Only x needs to be transformed since vertical flip wasn't performed
+        original_x = width - x
+        return (original_x, y)
+
+    def track_hands(self, video_path=0, save_video=False, output_path=None):
+        # Open video capture
+        cap = cv2.VideoCapture(video_path)
+        
+        # Results dictionary
+        results_dict = {}
+        frame_number = 0
+        
+        # Process video frames
+        while cap.isOpened():
+            success, img = cap.read()
+            if not success:
+                break
+                
+            # Get original dimensions
+            h, w, _ = img.shape
+            
+            # Flip image for display only
+            display_img = cv2.flip(img, 1)
+            img_rgb = cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB)
+            
+            # Process frame
+            hand_results = self.hands.process(img_rgb)
+            
+            # Initialize frame results
+            frame_results = {
+                'right_hand': {},
+                'left_hand': {}
+            }
+            
+            # Process detected hands
+            if hand_results.multi_hand_landmarks:
+                for hand_no, hand_landmarks in enumerate(hand_results.multi_hand_landmarks):
+                    # For flipped image, right hand appears as left and vice versa
+                    detected_label = hand_results.multi_handedness[hand_no].classification[0].label
+                    hand_type = 'left_hand' if detected_label == 'Right' else 'right_hand'
+                    
+                    # Extract thumb and index finger tip coordinates
+                    thumb_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.THUMB_TIP]
+                    index_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
+                    
+                    # Convert normalized coordinates to pixel coordinates in flipped image
+                    thumb_x, thumb_y = int(thumb_tip.x * w), int(thumb_tip.y * h)
+                    index_x, index_y = int(index_tip.x * w), int(index_tip.y * h)
+                    
+                    # Convert coordinates back to original image space
+                    orig_thumb_x, orig_thumb_y = self.convert_flipped_to_original_coords(thumb_x, thumb_y, w)
+                    orig_index_x, orig_index_y = self.convert_flipped_to_original_coords(index_x, index_y, w)
+                    
+                    # Store original image coordinates
+                    frame_results[hand_type] = {
+                        'thumbtip': (orig_thumb_x, orig_thumb_y),
+                        'indextip': (orig_index_x, orig_index_y)
+                    }
+                    
+                    # Draw landmarks on display image
+                    self.mp_draw.draw_landmarks(
+                        display_img, 
+                        hand_landmarks, 
+                        self.mp_hands.HAND_CONNECTIONS
+                    )
+            
+            # Store frame results
+            results_dict[frame_number] = frame_results
+            
+            # Display frame (optional)
+            # cv2.imshow("Hand Tracking", display_img)
+            
+            # Increment frame number
+            frame_number += 1
+            
+            # Exit on 'q' key press
+            # if cv2.waitKey(20) & 0xFF == ord('q'):
+            #     break
+        
+        # Release resources
+        cap.release()
+        # cv2.destroyAllWindows()
+        
+        return results_dict
+
 
 if __name__ == '__main__':
     
@@ -158,3 +271,22 @@ if __name__ == '__main__':
     video_segments = np.load("video_segments.npy", allow_pickle=True).item()
 
     pick_up_frame = find_pick_up_frame(video_segments)
+    print(pick_up_frame)
+
+    hand_tracker = HandTracking()
+    results = hand_tracker.track_hands("videos/test.mp4")
+    
+    print(results[pick_up_frame])
+
+    image = cv2.imread("frames/00000.jpeg")
+   
+
+    if 'thumbtip' in results[pick_up_frame]['left_hand']:
+        cv2.circle(image, results[pick_up_frame]['left_hand']['thumbtip'], 5, (0, 255, 0), -1)
+    if 'thumbtip' in results[pick_up_frame]['right_hand']:
+        cv2.circle(image, results[pick_up_frame]['right_hand']['thumbtip'], 5, (0, 255, 0), -1)
+    cv2.imshow("image", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    

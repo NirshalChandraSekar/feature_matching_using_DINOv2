@@ -5,3 +5,4 @@ images/
 videos/
 video_segments.npy
 frames/
+hand_landmarker.task
