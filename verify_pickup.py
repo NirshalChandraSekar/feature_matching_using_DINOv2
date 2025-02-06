@@ -123,21 +123,22 @@ def find_pick_up_frame(video_segments):
         cv2.rectangle(mask, (x-w//2, y-h//2), (x+w//2, y+h//2), (0, 255, 0), 2)      
         x_cord.append(x)
         y_cord.append(y) 
-        # cv2.imshow("mask", mask)
-        # if cv2.waitKey(30) & 0xFF == ord('q'):
-        #     break
+        cv2.imshow("mask", mask)
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
 
-    # cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
 
     # plot the xcord and ycords seperately in a graph
-    peaks, _ = find_peaks(y_cord, height=0)
+    peaks, _ = find_peaks(y_cord, height=y_cord[0]-50)
+    print(peaks)
     pick_up_frame = peaks[-1]
 
     # plt.plot(x_cord)
-    # plt.plot(y_cord, label="y_cord")
-    # plt.plot(pick_up_frame, y_cord[pick_up_frame], "x")
+    plt.plot(y_cord, label="y_cord")
+    plt.plot(pick_up_frame, y_cord[pick_up_frame], "x")
 
-    # plt.show()
+    plt.show()
 
     return pick_up_frame
     
@@ -240,18 +241,18 @@ class HandTracking:
             results_dict[frame_number] = frame_results
             
             # Display frame (optional)
-            # cv2.imshow("Hand Tracking", display_img)
+            cv2.imshow("Hand Tracking", display_img)
             
             # Increment frame number
             frame_number += 1
             
             # Exit on 'q' key press
-            # if cv2.waitKey(20) & 0xFF == ord('q'):
-            #     break
+            if cv2.waitKey(20) & 0xFF == ord('q'):
+                break
         
         # Release resources
         cap.release()
-        # cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
         
         return results_dict
 
@@ -259,14 +260,14 @@ class HandTracking:
 if __name__ == '__main__':
     
     vs = VideoSegmentation()
-    # first_frame = vs.split_video_frames("videos/test.mp4")
+    first_frame = vs.split_video_frames("videos/test2.mp4")
 
-    # point, labels = vs.interactive_point_selection(first_frame)
-    # labels = np.array([1]*len(point), np.int32)
+    point, labels = vs.interactive_point_selection(first_frame)
+    labels = np.array([1]*len(point), np.int32)
 
-    # video_segments = vs.segment_video("frames", point, labels)
+    video_segments = vs.segment_video("frames", point, labels)
 
-    # np.save("video_segments.npy", video_segments)
+    np.save("video_segments.npy", video_segments)
 
     video_segments = np.load("video_segments.npy", allow_pickle=True).item()
 
@@ -274,7 +275,7 @@ if __name__ == '__main__':
     print(pick_up_frame)
 
     hand_tracker = HandTracking()
-    results = hand_tracker.track_hands("videos/test.mp4")
+    results = hand_tracker.track_hands("videos/test2.mp4")
     
     print(results[pick_up_frame])
 
